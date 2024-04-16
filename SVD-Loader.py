@@ -1,7 +1,7 @@
 # Load specified SVD and generate peripheral memory maps & structures.
 #@author Thomas Roth <thomas.roth@leveldown.de>, Ryan Pavlik <ryan.pavlik@gmail.com>
-#@keybinding 
-#@menupath 
+#@keybinding
+#@menupath
 #@toolbar
 
 # More information:
@@ -49,14 +49,14 @@ class MemoryRegion:
 		self.start = min(self.start, other.start)
 		self.end = max(self.end, other.end)
 		self.name_parts.extend(other.name_parts)
-	
+
 	def overlaps(self, other):
 		if other.end < self.start:
 			return False
 		if self.end < other.start:
 			return False
 		return True
-	
+
 	def __str__(self):
 		return "{}({}:{})".format(self.name, hex(self.start), hex(self.end))
 
@@ -151,26 +151,35 @@ for r in memory_regions:
 
 print("\tDone!")
 
+# address to struct
+peripheral_addr_map = {}
+
 print("Generating peripherals...")
 for peripheral in peripherals:
-	print("\t" + peripheral.name)
+	print("\t{} @ {:08x}".format(peripheral.name, peripheral.base_address))
 
 	if(len(peripheral.registers) == 0):
 		print("\t\tNo registers.")
 		continue
 
-	# try:
+	peripheral_start = peripheral.base_address
+
 	# Iterage registers to get size of peripheral
 	# Most SVDs have an address-block that specifies the size, but
 	# they are often far too large, leading to issues with overlaps.
 	length = calculate_peripheral_size(peripheral, default_register_size)
 
-	# Generate structure for the peripheral
-	peripheral_struct = StructureDataType(peripheral.name, length)
+	# Generate structure for the peripheral, merging into any other peripheral at the same base
+	if peripheral_start in peripheral_addr_map:
+		peripheral_struct = peripheral_addr_map[peripheral_start]
+		peripheral_struct.setName(peripheral_struct.getName() + "_" + peripheral.name)
+		excess = length - peripheral_struct.getLength()
+		if excess > 0:
+			peripheral_struct.growStructure(excess)
+	else:
+		peripheral_struct = StructureDataType(peripheral.name, length)
+		peripheral_addr_map[peripheral_start] = peripheral_struct
 
-	peripheral_start = peripheral.base_address
-	peripheral_end = peripheral_start + length
-	print("\t\t{}:{}".format(hex(peripheral_start), hex(peripheral_end)))
 
 	for register in peripheral.registers:
 		register_size = default_register_size if not register._size else register._size
